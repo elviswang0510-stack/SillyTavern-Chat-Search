@@ -1,4 +1,4 @@
-import { chatName, extractMessage, matches, excerpt, fingerprint } from './core.js';
+import { chatName, cachedParts, matches, excerpt, fingerprint } from './core.js';
 
 async function post(context, path, body, signal, allowListError = false) {
     const response = await fetch(path, {
@@ -18,14 +18,11 @@ export function characterSnapshot(context) {
 }
 
 export async function searchHistory(context, options) {
-    const { signal, tokens, settings, scope, content, speaker, onProgress = () => {}, doc = document } = options;
+    const { signal, tokens, settings, scope, content, speaker, cache, onProgress = () => {}, doc = document } = options;
     const selected = characterSnapshot(context);
-    // Snapshot only the fields that may participate in search. Never read extra,
-    // swipes, prompts, character description, world info, or chat metadata.
-    const current = (context.chat || []).map(message => ({
-        mes: message.mes, is_system: message.is_system, is_user: message.is_user,
-        name: message.name, send_date: message.send_date,
-    }));
+    // Preserve message order without reading extra, swipes, prompts, world info,
+    // character description or chat metadata. Extraction only uses allowed text.
+    const current = (context.chat || []).slice();
     const files = new Set();
     let warning = '';
     if (scope === 'character') {
@@ -44,24 +41,27 @@ export async function searchHistory(context, options) {
     const failed = [];
     async function scan(messages, file, hasHeader = false) {
         signal.throwIfAborted();
-        // JSONL headers have no mes; filtering them before enumeration preserves
-        // the same zero-based IDs as context.chat and the message DOM.
+        // Only the JSONL header is skipped; preserve every actual message ID.
         const rows = hasHeader && typeof messages[0]?.mes !== 'string' ? messages.slice(1) : messages;
+        let sliceStart = performance.now();
         for (let messageId = 0; messageId < rows.length; messageId++) {
             signal.throwIfAborted();
-            if (messageId > 0 && messageId % 80 === 0) await new Promise(resolve => setTimeout(resolve, 0));
+            if (performance.now() - sliceStart >= 8) {
+                await new Promise(resolve => setTimeout(resolve, 0));
+                signal.throwIfAborted();
+                sliceStart = performance.now();
+            }
             const message = rows[messageId];
             if (!message) continue;
             if (speaker === 'character' && message.is_user) continue;
             if (speaker === 'user' && !message.is_user) continue;
-            const parts = extractMessage(message, settings, doc);
+            const parts = cachedParts(message, settings, doc, file === selected.current ? cache : undefined);
             if (!matches(parts, tokens, content)) continue;
             const body = content !== 'status' ? excerpt(parts.body, tokens) : '';
             const status = content !== 'body' ? excerpt(parts.status, tokens) : '';
             results.push({
                 avatar: selected.avatar, file, messageId,
                 author: typeof message.name === 'string' ? message.name : message.is_user ? '你' : selected.name,
-                date: typeof message.send_date === 'string' ? message.send_date : '',
                 body, status, fingerprint: fingerprint(message.mes),
             });
         }
@@ -92,4 +92,26 @@ export async function searchHistory(context, options) {
     signal.throwIfAborted();
     results.sort((a, b) => Number(b.file === selected.current) - Number(a.file === selected.current) || b.file.localeCompare(a.file) || b.messageId - a.messageId);
     return { results, failed, total, selected, warning };
+}
+
+// Read-only snapshot: never open/save a host chat or render its old floors.
+export async function readConversation(context, result, signal) {
+    const selected = characterSnapshot(context);
+    if (selected.avatar !== result.avatar) throw new Error('当前角色已经切换，请重新搜索。');
+    let rows;
+    if (selected.current === result.file) rows = (context.chat || []).slice();
+    else {
+        const data = await post(context, '/api/chats/get', {
+            avatar_url: selected.avatar, ch_name: selected.name, file_name: result.file,
+        }, signal);
+        if (!Array.isArray(data)) throw new Error('这段聊天读取失败，请返回结果后重试。');
+        rows = typeof data[0]?.mes !== 'string' ? data.slice(1) : data;
+    }
+    signal.throwIfAborted();
+    let messageId = result.messageId;
+    if (fingerprint(rows[messageId]?.mes || '') !== result.fingerprint) {
+        messageId = rows.findIndex(message => typeof message?.mes === 'string' && fingerprint(message.mes) === result.fingerprint);
+    }
+    if (messageId < 0) throw new Error('这条消息已被编辑或删除，请返回后重新搜索。');
+    return { rows, messageId };
 }

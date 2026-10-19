@@ -28,20 +28,29 @@ function clean(text) {
 
 export function extractMessage(message, settings = DEFAULTS, doc = document) {
     if (!message || message.is_system || typeof message.mes !== 'string') return null;
+    const ignored = tagNames(settings.ignoredTags ?? DEFAULTS.ignoredTags);
+    const statusTags = tagNames(settings.statusTags ?? DEFAULTS.statusTags);
+    // HTML parsers treat <中文标签> as text, not elements. Alias only configured
+    // non-HTML tag names before inert parsing so Chinese exclusions also work.
+    const aliases = new Map([...new Set([...ignored, ...statusTags])]
+        .filter(name => !/^[a-z][a-z0-9_-]*$/.test(name))
+        .map((name, index) => [name, `stcs-content-tag-${index}`]));
+    const mappedName = name => aliases.get(name) || name;
+    const source = message.mes.replace(/<(\/?)([\p{L}_][\p{L}\p{N}_-]*)(?=[\s/>])([^>]*?)>/gu,
+        (whole, close, name, attributes) => aliases.has(name.toLowerCase()) ? `<${close}${mappedName(name.toLowerCase())}${attributes}>` : whole);
     // HTML inside template.content stays inert: never append it to the live DOM.
     const template = doc.createElement('template');
-    template.innerHTML = message.mes.replace(/```(?:think|thinking|analysis|reasoning|cot)\b[^\n]*\n[\s\S]*?(?:```|$)/gi, '')
+    template.innerHTML = source.replace(/```(?:think|thinking|analysis|reasoning|cot)\b[^\n]*\n[\s\S]*?(?:```|$)/gi, '')
         .replace(/```[^\n]*\n([\s\S]*?)```/g, '$1');
     const root = template.content;
-    const ignored = tagNames(settings.ignoredTags ?? DEFAULTS.ignoredTags);
-    const omitted = [UNSAFE, OMIT_SELECTOR, ...ignored].join(',');
+    const omitted = [UNSAFE, OMIT_SELECTOR, ...ignored.map(mappedName)].join(',');
     root.querySelectorAll(omitted).forEach(node => node.remove());
     // Hidden template scaffolding is not visible story or status content.
     root.querySelectorAll('[hidden],[aria-hidden="true"]').forEach(node => node.remove());
     root.querySelectorAll('[style]').forEach(node => {
         if (/display\s*:\s*none|visibility\s*:\s*hidden/i.test(node.getAttribute('style'))) node.remove();
     });
-    const statusNodes = new Set(root.querySelectorAll([STATUS_SELECTOR, ...tagNames(settings.statusTags ?? DEFAULTS.statusTags)].join(',')));
+    const statusNodes = new Set(root.querySelectorAll([STATUS_SELECTOR, ...statusTags.map(mappedName)].join(',')));
     root.querySelectorAll('details').forEach(node => {
         const summary = Array.from(node.children).find(child => child.nodeName === 'SUMMARY');
         if (summary && /状态|status|人物信息|角色信息/i.test(summary.textContent)) statusNodes.add(node);
@@ -60,6 +69,39 @@ export function extractMessage(message, settings = DEFAULTS, doc = document) {
         body = body.slice(0, marker.index).trim();
     }
     return { body, status: clean(status.join('\n')) };
+}
+
+export function createTextCache() {
+    const entries = new Map();
+    let characters = 0;
+    return {
+        get(message) {
+            const entry = entries.get(message);
+            if (entry) { entries.delete(message); entries.set(message, entry); }
+            return entry;
+        },
+        set(message, entry) {
+            const previous = entries.get(message);
+            if (previous) { characters -= previous.size; entries.delete(message); }
+            const size = (entry.parts?.body.length || 0) + (entry.parts?.status.length || 0);
+            if (size > 4_000_000) return;
+            entries.set(message, { ...entry, size }); characters += size;
+            while (characters > 4_000_000 || entries.size > 6000) {
+                const oldest = entries.keys().next().value;
+                characters -= entries.get(oldest).size; entries.delete(oldest);
+            }
+        },
+    };
+}
+
+export function cachedParts(message, settings, doc, cache) {
+    if (!message || typeof message !== 'object') return null;
+    const signature = `${settings.statusTags}\n${settings.ignoredTags}`;
+    const entry = cache?.get(message);
+    if (entry && entry.raw === message.mes && entry.system === message.is_system && entry.signature === signature) return entry.parts;
+    const parts = extractMessage(message, settings, doc);
+    cache?.set(message, { raw: message.mes, system: message.is_system, signature, parts });
+    return parts;
 }
 
 export function queryTokens(query) {

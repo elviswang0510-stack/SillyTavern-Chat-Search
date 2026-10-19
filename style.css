@@ -8,6 +8,7 @@
     flex-direction: column;
     color: var(--SmartThemeBodyColor, #e8e8ed);
     background: var(--SmartThemeBlurTintColor, #202026);
+    background: rgb(from var(--SmartThemeBlurTintColor, #202026) r g b / 1);
     border-inline-start: 1px solid var(--SmartThemeBorderColor, #5c5c68);
     font-family: var(--mainFontFamily, inherit);
     font-size: 14px;
@@ -16,6 +17,7 @@
 .stcs-panel[hidden], .stcs-panel [hidden] { display: none !important; }
 .stcs-panel *, .stcs-settings * { box-sizing: border-box; }
 .stcs-panel .menu_button, .stcs-settings .menu_button { width: auto; margin: 0; min-height: 36px; padding: 6px 12px; font: inherit; }
+.stcs-search-view, .stcs-reader-view { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .stcs-header { display: flex; justify-content: space-between; align-items: start; gap: 16px; padding: 20px 20px 12px; }
 .stcs-header h2 { font-size: 20px; margin: 0; line-height: 1.4; }
 .stcs-header p { font-size: 13px; margin: 5px 0 0; overflow-wrap: anywhere; }
@@ -37,9 +39,7 @@
 .stcs-result { padding: 17px 0 19px; border-bottom: 1px solid var(--SmartThemeBorderColor, #5c5c68); }
 .stcs-result-head { display: flex; gap: 10px; align-items: center; font-variant-numeric: tabular-nums; }
 .stcs-result-head strong { min-width: 0; overflow-wrap: anywhere; }
-.stcs-panel .stcs-jump { margin-inline-start: auto; flex-shrink: 0; }
-.stcs-file { font-size: 12px; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.stcs-date { font-size: 11px; margin-top: 3px; overflow-wrap: anywhere; }
+.stcs-panel .stcs-expand { margin-inline-start: auto; flex-shrink: 0; }
 .stcs-muted { font-size: 12px; }
 .stcs-excerpt { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.75; margin: 10px 0 0; }
 .stcs-content-label { display: inline; font-size: 12px; font-weight: 700; margin-inline-end: 8px; }
@@ -59,12 +59,28 @@
 .stcs-settings label { display: block; margin: 12px 0; font-size: 13px; }
 .stcs-settings input { width: 100%; display: block; margin-top: 5px; }
 .stcs-menu { text-align: start; color: inherit; font: inherit; background: transparent; border: 0; cursor: pointer; }
-#chat .mes.stcs-located { outline: 2px solid var(--SmartThemeQuoteColor, #d8bd78); outline-offset: -2px; }
+.stcs-shortcut { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px 12px; color: inherit; text-decoration: none; cursor: pointer; }
+.stcs-shortcut:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
+.stcs-reader-toolbar { display: flex; gap: 14px; align-items: center; padding: 0 20px 14px; border-bottom: 1px solid var(--SmartThemeBorderColor, #5c5c68); }
+.stcs-reader-toolbar > button { flex-shrink: 0; }
+.stcs-reader-toolbar label { display: flex; align-items: center; justify-content: end; gap: 8px; flex: 1; min-width: 0; white-space: nowrap; font-size: 12px; }
+.stcs-reader-toolbar select { max-width: 165px; }
+.stcs-reader-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 0 20px; scrollbar-color: var(--SmartThemeBodyColor, #e8e8ed) transparent; scrollbar-width: thin; }
+.stcs-reader-feedback { padding: 12px 20px; margin: 0; line-height: 1.6; font-size: 13px; }
+.stcs-reader-feedback:empty { display: none; }
+.stcs-reader-message { padding: 20px 0; border-bottom: 1px solid var(--SmartThemeBorderColor, #5c5c68); }
+.stcs-reader-author { display: flex; gap: 12px; align-items: center; font-size: 13px; overflow-wrap: anywhere; }
+.stcs-hit-label { font-size: 11px; font-weight: 600; margin-inline-start: auto; flex-shrink: 0; }
+.stcs-reader-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.9; margin: 12px 0 0; }
+.stcs-reader-message[data-hit] .stcs-reader-author { text-decoration: underline; text-underline-offset: 5px; }
+.stcs-panel .stcs-reader-page { display: block; width: 100%; margin: 16px 0; }
 @media (max-width: 540px) {
     .stcs-panel { inset: 0; width: 100%; height: 100dvh; z-index: 5000; border: 0; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
     .stcs-header { padding: 16px 16px 12px; }
     .stcs-form, .stcs-feedback { padding-inline: 16px; }
     .stcs-results { padding-inline: 16px; }
+    .stcs-reader-scroll, .stcs-reader-toolbar { padding-inline: 16px; }
+    .stcs-panel .menu_button { min-height: 44px; }
     .stcs-filters { grid-template-columns: 1fr 1fr; }
     .stcs-filters label:last-child { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; }
     .stcs-filters label:last-child select { flex: 1; }
