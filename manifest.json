@@ -1,0 +1,11 @@
+{
+    "display_name": "聊天搜索 · 正文与状态栏",
+    "loading_order": 50,
+    "requires": [],
+    "optional": [],
+    "js": "index.js",
+    "css": "style.css",
+    "author": "elviswang0510-stack",
+    "version": "1.0.0",
+    "homePage": "https://github.com/elviswang0510-stack/SillyTavern-Chat-Search"
+}
